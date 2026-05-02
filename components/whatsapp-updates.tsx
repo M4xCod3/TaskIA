@@ -1,61 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { createClient } from "@/lib/supabase/client"
 import { Badge } from "@/components/ui/badge"
-import { MessageCircle, Bot, Sparkles, Bell, X } from "lucide-react"
+import { MessageCircle, Bot, Sparkles, Bell, X, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
-
-interface Update {
-  id: string
-  title: string
-  message: string
-  time: string
-  type: "sync" | "reminder" | "insight" | "alert"
-  read: boolean
-}
-
-const initialUpdates: Update[] = [
-  {
-    id: "1",
-    title: "Study Schedule Updated",
-    message: "Your AI agent synced 3 new study sessions from your group chat",
-    time: "2 min ago",
-    type: "sync",
-    read: false,
-  },
-  {
-    id: "2",
-    title: "Exam Reminder",
-    message: "Physics final exam is in 2 days. Review quantum mechanics notes.",
-    time: "15 min ago",
-    type: "reminder",
-    read: false,
-  },
-  {
-    id: "3",
-    title: "Smart Insight",
-    message: "Based on your study patterns, consider a 30-min break now.",
-    time: "1 hour ago",
-    type: "insight",
-    read: true,
-  },
-  {
-    id: "4",
-    title: "Group Chat Activity",
-    message: "5 new messages in Math Study Group about tomorrow's quiz",
-    time: "2 hours ago",
-    type: "alert",
-    read: true,
-  },
-  {
-    id: "5",
-    title: "Resource Shared",
-    message: "Maria shared chemistry flashcards to your study materials",
-    time: "3 hours ago",
-    type: "sync",
-    read: true,
-  },
-]
+import type { WhatsAppUpdate } from "@/lib/types"
+import { formatDistanceToNow } from "date-fns"
 
 const typeConfig = {
   sync: {
@@ -81,21 +32,70 @@ const typeConfig = {
 }
 
 export function WhatsAppUpdates() {
-  const [updates, setUpdates] = useState<Update[]>(initialUpdates)
+  const [updates, setUpdates] = useState<WhatsAppUpdate[]>([])
+  const [loading, setLoading] = useState(true)
   const [isExpanded, setIsExpanded] = useState(true)
+  const supabase = createClient()
 
-  const unreadCount = updates.filter((u) => !u.read).length
+  useEffect(() => {
+    fetchUpdates()
 
-  const markAsRead = (id: string) => {
-    setUpdates((prev) =>
-      prev.map((update) =>
-        update.id === id ? { ...update, read: true } : update
+    // Set up real-time subscription
+    const channel = supabase
+      .channel("whatsapp-updates-changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "whatsapp_updates" },
+        (payload) => {
+          if (payload.eventType === "INSERT") {
+            setUpdates((prev) => [payload.new as WhatsAppUpdate, ...prev])
+          } else if (payload.eventType === "UPDATE") {
+            setUpdates((prev) =>
+              prev.map((update) =>
+                update.id === payload.new.id ? (payload.new as WhatsAppUpdate) : update
+              )
+            )
+          } else if (payload.eventType === "DELETE") {
+            setUpdates((prev) => prev.filter((update) => update.id !== payload.old.id))
+          }
+        }
       )
-    )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [])
+
+  const fetchUpdates = async () => {
+    const { data, error } = await supabase
+      .from("whatsapp_updates")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(10)
+
+    if (!error && data) {
+      setUpdates(data)
+    }
+    setLoading(false)
   }
 
-  const dismissUpdate = (id: string) => {
-    setUpdates((prev) => prev.filter((update) => update.id !== id))
+  const unreadCount = updates.filter((u) => !u.is_read).length
+
+  const markAsRead = async (id: string) => {
+    await supabase.from("whatsapp_updates").update({ is_read: true }).eq("id", id)
+  }
+
+  const dismissUpdate = async (id: string) => {
+    await supabase.from("whatsapp_updates").delete().eq("id", id)
+  }
+
+  const formatTime = (dateString: string) => {
+    try {
+      return formatDistanceToNow(new Date(dateString), { addSuffix: true })
+    } catch {
+      return dateString
+    }
   }
 
   return (
@@ -122,59 +122,69 @@ export function WhatsAppUpdates() {
 
       {isExpanded && (
         <div className="space-y-2.5">
-          {updates.map((update) => {
-            const config = typeConfig[update.type]
-            const Icon = config.icon
-            return (
-              <div
-                key={update.id}
-                onClick={() => markAsRead(update.id)}
-                className={cn(
-                  "group relative cursor-pointer rounded-xl border p-3 transition-all duration-200 hover:bg-secondary/50",
-                  update.read
-                    ? "border-border/30 bg-secondary/20"
-                    : "border-primary/30 bg-primary/5"
-                )}
-              >
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    dismissUpdate(update.id)
-                  }}
-                  className="absolute right-2 top-2 rounded-md p-1 opacity-0 transition-opacity hover:bg-muted group-hover:opacity-100"
+          {loading ? (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="size-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : updates.length === 0 ? (
+            <div className="py-4 text-center text-sm text-muted-foreground">
+              No updates yet. Messages from your WhatsApp AI agent will appear here.
+            </div>
+          ) : (
+            updates.map((update) => {
+              const config = typeConfig[update.message_type]
+              const Icon = config.icon
+              return (
+                <div
+                  key={update.id}
+                  onClick={() => markAsRead(update.id)}
+                  className={cn(
+                    "group relative cursor-pointer rounded-xl border p-3 transition-all duration-200 hover:bg-secondary/50",
+                    update.is_read
+                      ? "border-border/30 bg-secondary/20"
+                      : "border-primary/30 bg-primary/5"
+                  )}
                 >
-                  <X className="size-3.5 text-muted-foreground" />
-                </button>
-                
-                <div className="flex items-start gap-3">
-                  <div
-                    className={cn(
-                      "mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg",
-                      config.color
-                    )}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      dismissUpdate(update.id)
+                    }}
+                    className="absolute right-2 top-2 rounded-md p-1 opacity-0 transition-opacity hover:bg-muted group-hover:opacity-100"
                   >
-                    <Icon className="size-3.5" />
-                  </div>
-                  <div className="flex-1 min-w-0 pr-4">
-                    <div className="flex items-center gap-2">
-                      <p className="truncate text-sm font-medium text-foreground">
-                        {update.title}
-                      </p>
-                      {!update.read && (
-                        <span className="size-2 shrink-0 rounded-full bg-primary" />
+                    <X className="size-3.5 text-muted-foreground" />
+                  </button>
+
+                  <div className="flex items-start gap-3">
+                    <div
+                      className={cn(
+                        "mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg",
+                        config.color
                       )}
+                    >
+                      <Icon className="size-3.5" />
                     </div>
-                    <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
-                      {update.message}
-                    </p>
-                    <p className="mt-1.5 text-xs text-muted-foreground/60">
-                      {update.time}
-                    </p>
+                    <div className="min-w-0 flex-1 pr-4">
+                      <div className="flex items-center gap-2">
+                        <p className="truncate text-sm font-medium text-foreground">
+                          {update.title}
+                        </p>
+                        {!update.is_read && (
+                          <span className="size-2 shrink-0 rounded-full bg-primary" />
+                        )}
+                      </div>
+                      <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+                        {update.content}
+                      </p>
+                      <p className="mt-1.5 text-xs text-muted-foreground/60">
+                        {formatTime(update.created_at)}
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )
-          })}
+              )
+            })
+          )}
         </div>
       )}
     </div>
