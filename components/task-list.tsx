@@ -111,18 +111,27 @@ export function TaskList() {
   }
 
   const addTask = async () => {
-    if (!newTask.subject.trim() || !newTask.description.trim()) return
+    console.log("[v0] addTask called with:", newTask)
+    if (!newTask.subject.trim() || !newTask.description.trim()) {
+      console.log("[v0] Validation failed - empty fields")
+      return
+    }
 
     setIsAdding(true)
-    const { error } = await supabase.from("tasks").insert({
+    console.log("[v0] Inserting task to Supabase...")
+    const { data, error } = await supabase.from("tasks").insert({
       subject: newTask.subject,
       description: newTask.description,
       priority: newTask.priority,
       source: "web",
-    })
+    }).select()
 
+    console.log("[v0] Insert result:", { data, error })
+    
     if (!error) {
       setNewTask({ subject: "", description: "", priority: "medium" })
+    } else {
+      console.error("[v0] Error inserting task:", error)
     }
     setIsAdding(false)
   }

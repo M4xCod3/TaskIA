@@ -1,8 +1,5 @@
-"use server"
-
 import { createClient } from "@/lib/supabase/server"
 import { generateText } from "ai"
-import { openai } from "@ai-sdk/openai"
 import twilio from "twilio"
 
 const MessagingResponse = twilio.twiml.MessagingResponse
@@ -53,7 +50,7 @@ export async function POST(request: Request) {
 
     // Use AI to understand the message and extract structured data
     const { text: aiResponse } = await generateText({
-      model: openai("gpt-4o-mini"),
+      model: "openai/gpt-4o-mini",
       system: `Eres un asistente de estudio que ayuda a estudiantes a organizar sus tareas y eventos.
       
 Cuando el usuario envíe un mensaje, analiza si quiere:
