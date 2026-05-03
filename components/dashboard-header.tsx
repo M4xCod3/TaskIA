@@ -22,7 +22,7 @@ export function DashboardHeader() {
         <h1 className="text-2xl font-bold text-foreground sm:text-3xl">
           Welcome back, <span className="text-primary">Alex</span>
         </h1>
-        <p className="mt-1 text-muted-foreground">{currentDate}</p>
+        <p className="mt-1 text-muted-foreground" suppressHydrationWarning>{currentDate || "\u00A0"}</p>
       </div>
 
       <div className="flex items-center gap-3">

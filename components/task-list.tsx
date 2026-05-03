@@ -67,8 +67,13 @@ export function TaskList() {
         "postgres_changes",
         { event: "*", schema: "public", table: "tasks" },
         (payload) => {
+          
           if (payload.eventType === "INSERT") {
-            setTasks((prev) => [payload.new as Task, ...prev])
+            setTasks((prev) => {
+              // Avoid duplicates
+              if (prev.some(t => t.id === (payload.new as Task).id)) return prev
+              return [payload.new as Task, ...prev]
+            })
           } else if (payload.eventType === "UPDATE") {
             setTasks((prev) =>
               prev.map((task) =>
@@ -111,27 +116,25 @@ export function TaskList() {
   }
 
   const addTask = async () => {
-    console.log("[v0] addTask called with:", newTask)
     if (!newTask.subject.trim() || !newTask.description.trim()) {
-      console.log("[v0] Validation failed - empty fields")
       return
     }
 
     setIsAdding(true)
-    console.log("[v0] Inserting task to Supabase...")
     const { data, error } = await supabase.from("tasks").insert({
       subject: newTask.subject,
       description: newTask.description,
       priority: newTask.priority,
       source: "web",
     }).select()
-
-    console.log("[v0] Insert result:", { data, error })
     
-    if (!error) {
+    if (!error && data && data[0]) {
+      // Optimistically add to UI immediately
+      setTasks((prev) => {
+        if (prev.some(t => t.id === data[0].id)) return prev
+        return [data[0] as Task, ...prev]
+      })
       setNewTask({ subject: "", description: "", priority: "medium" })
-    } else {
-      console.error("[v0] Error inserting task:", error)
     }
     setIsAdding(false)
   }
@@ -191,10 +194,7 @@ export function TaskList() {
           />
           <Button
             type="button"
-            onClick={() => {
-              console.log("[v0] Button clicked!")
-              addTask()
-            }}
+            onClick={addTask}
             disabled={isAdding || !newTask.subject.trim() || !newTask.description.trim()}
             className="gap-2"
           >

@@ -40,9 +40,27 @@ function parseAIResponse(response: string): {
 
 export async function POST(request: Request) {
   try {
-    const formData = await request.formData()
-    const body = formData.get("Body") as string
-    const from = formData.get("From") as string
+    // Twilio sends data as URL-encoded form data
+    const contentType = request.headers.get("content-type") || ""
+    let body: string | null = null
+    let from: string | null = null
+
+    if (contentType.includes("application/x-www-form-urlencoded")) {
+      const formData = await request.formData()
+      body = formData.get("Body") as string
+      from = formData.get("From") as string
+    } else if (contentType.includes("application/json")) {
+      const json = await request.json()
+      body = json.Body || json.body
+      from = json.From || json.from
+    } else {
+      // Try form data anyway
+      const formData = await request.formData()
+      body = formData.get("Body") as string
+      from = formData.get("From") as string
+    }
+
+    console.log("[WhatsApp] Received message:", { body, from, contentType })
 
     if (!body) {
       return new Response("No message body", { status: 400 })
