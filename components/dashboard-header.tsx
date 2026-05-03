@@ -1,15 +1,20 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { Bell, Search, User } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 
 export function DashboardHeader() {
-  const currentDate = new Date().toLocaleDateString("en-US", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  })
+  const [currentDate, setCurrentDate] = useState<string>("")
+
+  useEffect(() => {
+    setCurrentDate(new Date().toLocaleDateString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    }))
+  }, [])
 
   return (
     <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

@@ -190,7 +190,11 @@ export function TaskList() {
             onKeyDown={(e) => e.key === "Enter" && addTask()}
           />
           <Button
-            onClick={addTask}
+            type="button"
+            onClick={() => {
+              console.log("[v0] Button clicked!")
+              addTask()
+            }}
             disabled={isAdding || !newTask.subject.trim() || !newTask.description.trim()}
             className="gap-2"
           >
