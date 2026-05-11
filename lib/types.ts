@@ -5,12 +5,12 @@ export interface Task {
   priority: 'high' | 'medium' | 'low'
   completed: boolean
   due_date: string | null
-  source: 'web'
+  source: 'web' | 'whatsapp'
   created_at: string
   updated_at: string
 }
 
-export interface UpdateNotification {
+export interface WhatsAppUpdate {
   id: string
   message_type: 'sync' | 'reminder' | 'insight' | 'alert'
   title: string
@@ -27,6 +27,6 @@ export interface CalendarEvent {
   event_date: string
   event_type: 'exam' | 'study' | 'project' | 'deadline'
   subject: string | null
-  source: 'web'
+  source: 'web' | 'whatsapp'
   created_at: string
 }
